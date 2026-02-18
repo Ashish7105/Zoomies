@@ -1,5 +1,17 @@
 This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://github.com/vercel/next.js/tree/canary/packages/create-next-app).
 
+## Employee Management System
+
+- **Employee login:** Navbar → "👨‍💼 Employee" or `/employee/login`  
+  - Session stored in **localStorage** (`employeeSession`).  
+  - Demo: `employee@zommies.com` / `password123`
+- **Employee dashboard:** `/employee/dashboard` – view store orders, update status, order details with pickup/delivery and “Get Directions”
+- **Admin (employees CRUD):** Navbar → “Admin” or `/admin/employees`  
+  - Only for customer users whose Firestore `users/{uid}` has `role: 'admin'`
+
+See **EMPLOYEE_FIREBASE_SETUP.md** for Firestore `employees` and `stores`.  
+See **EMPLOYEE_SYSTEM_GUIDE.md** for architecture, data model, and how to implement the same setup in another project.
+
 ## Getting Started
 
 First, run the development server:

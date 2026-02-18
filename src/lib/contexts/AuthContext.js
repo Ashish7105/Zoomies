@@ -1,7 +1,7 @@
 "use client";
 
 import { createContext, useContext, useEffect, useState } from "react";
-import { auth } from "@/lib/firebase";
+import { auth, db } from "@/lib/firebase";
 
 import {
   GoogleAuthProvider,
@@ -9,6 +9,20 @@ import {
   onAuthStateChanged,
   signOut,
 } from "firebase/auth";
+import {
+  signInWithEmailAndPassword,
+  createUserWithEmailAndPassword,
+  fetchSignInMethodsForEmail,
+} from "firebase/auth";
+import {
+  doc,
+  setDoc,
+  updateDoc,
+  collection,
+  addDoc,
+  serverTimestamp,
+  arrayUnion,
+} from "firebase/firestore";
 
 const AuthContext = createContext();
 
@@ -21,6 +35,8 @@ export default function AuthProvider({ children }) {
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
       setUser(firebaseUser || null);
+      // Ensure user document exists in Firestore when logged in
+      if (firebaseUser) ensureUserInDb(firebaseUser).catch(console.error);
       setIsLoading(false);
     });
 
@@ -37,6 +53,8 @@ export default function AuthProvider({ children }) {
       const result = await signInWithPopup(auth, provider);
 
       setUser(result.user);
+      // create/update user in Firestore
+      await ensureUserInDb(result.user);
 
     } catch (err) {
 
@@ -52,6 +70,171 @@ export default function AuthProvider({ children }) {
     } finally {
       setIsLoading(false);
     }
+  };
+
+  // ✅ Email/password sign-in
+  const handleSignInWithEmail = async (email, password) => {
+    try {
+      setIsLoading(true);
+      setError(null);
+
+      const result = await signInWithEmailAndPassword(auth, email, password);
+      setUser(result.user);
+      await ensureUserInDb(result.user);
+    } catch (err) {
+      console.error("Email Sign-In Error:", err?.code, err?.message, err);
+      const message =
+        err?.code === "auth/invalid-credential"
+          ? "Invalid email or password."
+          : err?.code === "auth/user-not-found"
+            ? "No account found with this email."
+            : err?.code === "auth/wrong-password"
+              ? "Invalid email or password."
+              : err?.code === "auth/too-many-requests"
+                ? "Too many attempts. Please try again later."
+                : err?.message || "Login failed. Please check your credentials.";
+      setError(message);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // ✅ Email/password sign-up
+  const handleSignUpWithEmail = async (email, password) => {
+    try {
+      setIsLoading(true);
+      setError(null);
+
+      const result = await createUserWithEmailAndPassword(auth, email, password);
+      setUser(result.user);
+      await ensureUserInDb(result.user);
+    } catch (err) {
+      console.error("Email Sign-Up Error:", err?.code, err?.message, err);
+
+      // If the email is already in use, check which providers are registered
+      if (err?.code === "auth/email-already-in-use") {
+        try {
+          const methods = await fetchSignInMethodsForEmail(auth, email);
+          if (methods && methods.includes("google.com")) {
+            setError("This email is already registered with Google. Please sign in with Google.");
+          } else if (methods && methods.length > 0) {
+            setError(`This email is already registered. Sign-in methods: ${methods.join(", ")}`);
+          } else {
+            setError("This email is already in use. Please try signing in or reset your password.");
+          }
+        } catch (innerErr) {
+          console.error("fetchSignInMethodsForEmail failed:", innerErr);
+          setError(err?.message || "Sign up failed. Please try again.");
+        }
+      } else {
+        setError(err?.message || "Sign up failed. Please try again.");
+      }
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // --- Firestore helpers ---
+  // users/{uid}: role 'user'|'admin', hasPetProfile, petInfo: { petName, petType, userId, selectedItem }
+  async function ensureUserInDb(firebaseUser) {
+    if (!firebaseUser) return;
+    const uid = firebaseUser.uid;
+    const userRef = doc(db, "users", uid);
+
+    await setDoc(
+      userRef,
+      {
+        uid,
+        email: firebaseUser.email || null,
+        displayName: firebaseUser.displayName || null,
+        role: "user",
+        hasPetProfile: false,
+        petInfo: null,
+        petType: null,
+        selectedPetName: null,
+        addresses: [],
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      },
+      { merge: true }
+    );
+  }
+
+  // Set or change the user's pet type (cat/dog)
+  const setPetType = async (uid, petType) => {
+    if (!uid) throw new Error("Missing uid");
+    const userRef = doc(db, "users", uid);
+    await updateDoc(userRef, { petType, updatedAt: serverTimestamp() });
+  };
+
+  // Add an address (e.g., from Google Maps / Leaflet selection)
+  const addAddress = async (uid, addressObj) => {
+    if (!uid) throw new Error("Missing uid");
+    const userRef = doc(db, "users", uid);
+    await updateDoc(userRef, { addresses: arrayUnion(addressObj) });
+  };
+
+  // Set or change the user's selected pet name; sync petInfo for schema
+  const setSelectedPetName = async (uid, petName) => {
+    if (!uid) throw new Error("Missing uid");
+    const userRef = doc(db, "users", uid);
+    await updateDoc(userRef, { selectedPetName: petName, updatedAt: serverTimestamp() });
+  };
+
+  // Update petInfo (petName, petType, selectedItem) and set hasPetProfile
+  const setPetInfo = async (uid, petInfo) => {
+    if (!uid) throw new Error("Missing uid");
+    const userRef = doc(db, "users", uid);
+    const payload = {
+      hasPetProfile: !!petInfo,
+      petInfo: petInfo ? { ...petInfo, userId: uid } : null,
+      updatedAt: serverTimestamp(),
+    };
+    if (petInfo?.petType) payload.petType = petInfo.petType;
+    if (petInfo?.petName) payload.selectedPetName = petInfo.petName;
+    await updateDoc(userRef, payload);
+  };
+
+  // Place an order document in `orders` collection
+  // deliveryAddress: { address, coordinates: { lat, lng } } for custom delivery
+  // storeId: for pickup orders (e.g. DEFAULT_STORE_ID)
+  const placeOrder = async ({
+    uid,
+    cartItems,
+    petFor,
+    deliveryOption,
+    address,
+    coordinates = null,
+    storeId = null,
+    addressDetails = null,
+  }) => {
+    if (!uid) throw new Error("Missing uid");
+    const ordersCol = collection(db, "orders");
+    const isPickup = deliveryOption === "store";
+    const assignedStoreId = isPickup ? storeId || "store1" : storeId || "store1";
+    const order = {
+      userId: uid,
+      items: cartItems,
+      petFor,
+      deliveryOption,
+      address: address || null,
+      status: "pending",
+      createdAt: serverTimestamp(),
+      storeId: assignedStoreId,
+      deliveryAddress:
+        !isPickup && address
+          ? {
+              address,
+              coordinates: coordinates
+                ? { lat: coordinates.lat, lng: coordinates.lng }
+                : null,
+              details: addressDetails || null,
+            }
+          : null,
+    };
+
+    const docRef = await addDoc(ordersCol, order);
+    return docRef.id;
   };
 
   // ✅ Logout (CLEAN)
@@ -79,7 +262,15 @@ export default function AuthProvider({ children }) {
         isLoading,
         error,
         handleSignInWithGoogle,
+        handleSignInWithEmail,
+        handleSignUpWithEmail,
         handleLogout,
+        // Firestore helpers available to consumers
+        setPetType,
+        setSelectedPetName,
+        setPetInfo,
+        addAddress,
+        placeOrder,
       }}
     >
       {children}

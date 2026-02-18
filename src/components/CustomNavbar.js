@@ -5,11 +5,16 @@ import Link from "next/link";
 import Image from "next/image";
 import { X } from "lucide-react";
 import { useAuth } from "@/lib/contexts/AuthContext";
-import CartButton from "@/components/cart/CartButton"; // ✅ IMPORTANT
+import { useEmployee } from "@/lib/contexts/EmployeeContext";
+import { useUserProfile } from "@/lib/hooks/useUserProfile";
+import CartButton from "@/components/cart/CartButton";
 
 export default function CustomNavbar() {
   const [isOpen, setIsOpen] = useState(false);
   const { user, handleLogout } = useAuth();
+  const { isEmployeeLoggedIn } = useEmployee();
+  const { profile } = useUserProfile(user?.uid || null);
+  const isAdmin = profile?.role === "admin";
 
   return (
     <>
@@ -39,7 +44,24 @@ export default function CustomNavbar() {
           {/* Right Section */}
           <div className="flex items-center gap-3">
 
-            {/* ✅ Cart Button */}
+            {/* Admin link (customer user with role admin) */}
+            {isAdmin && (
+              <Link
+                href="/admin"
+                className="bg-slate-100 text-slate-700 px-4 py-2 rounded-full text-sm font-medium hover:bg-slate-200 transition"
+              >
+                Admin
+              </Link>
+            )}
+            {/* Employee portal link (when not customer logged in) */}
+            {!user && (
+              <Link
+                href={isEmployeeLoggedIn ? "/employee/dashboard" : "/employee/login"}
+                className="bg-slate-100 text-slate-700 px-4 py-2 rounded-full text-sm font-medium hover:bg-slate-200 transition"
+              >
+                👨‍💼 Employee
+              </Link>
+            )}
             <CartButton />
 
             {/* ✅ Hamburger Button */}
@@ -84,9 +106,18 @@ export default function CustomNavbar() {
 
           {/* Menu Items */}
           <div className="flex flex-col gap-5 px-6 text-lg font-semibold text-slate-800">
-
+            {isAdmin && (
+              <Link href="/admin/employees" onClick={() => setIsOpen(false)}>
+                Admin
+              </Link>
+            )}
+            <Link
+              href={isEmployeeLoggedIn ? "/employee/dashboard" : "/employee/login"}
+              onClick={() => setIsOpen(false)}
+            >
+              👨‍💼 Employee
+            </Link>
             <Link href="/profile" onClick={() => setIsOpen(false)}>MyProfile</Link>
-            <Link href="/boarding" onClick={() => setIsOpen(false)}>Boarding</Link>
             <Link href="/about" onClick={() => setIsOpen(false)}>About</Link>
             <Link href="/contact" onClick={() => setIsOpen(false)}>Contact</Link>
             <Link href="/find-us" onClick={() => setIsOpen(false)}>Find Us</Link>

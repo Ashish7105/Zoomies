@@ -1,6 +1,7 @@
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import AuthProvider from "@/lib/contexts/AuthContext";
+import EmployeeProvider from "@/lib/contexts/EmployeeContext";
 import CustomNavbar from "@/components/CustomNavbar";
 import { CartProvider } from "@/lib/contexts/CartContext";
 import CartSidebar from "@/components/cart/CartSidebar";
@@ -28,9 +29,11 @@ export default function RootLayout({ children }) {
       >
         <CartProvider>
         <AuthProvider>
-          <CustomNavbar/>
-          <CartSidebar/>
-          {children}
+          <EmployeeProvider>
+            <CustomNavbar />
+            <CartSidebar />
+            {children}
+          </EmployeeProvider>
         </AuthProvider>
         </CartProvider>
         

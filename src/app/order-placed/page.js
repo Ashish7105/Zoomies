@@ -1,9 +1,18 @@
 "use client";
 
 import { useRouter } from "next/navigation";
+import { useEffect } from "react";
+import { useCart } from "@/lib/contexts/CartContext";
 
 export default function OrderSuccessPage() {
   const router = useRouter();
+  const { clearCart } = useCart();
+
+  // ✅ Clear cart when order is successfully placed
+  useEffect(() => {
+    clearCart();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   return (
     <div className="flex justify-center items-center min-h-screen bg-cream p-4">
