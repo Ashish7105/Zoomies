@@ -22,6 +22,7 @@ import {
   addDoc,
   serverTimestamp,
   arrayUnion,
+  getDoc,
 } from "firebase/firestore";
 
 const AuthContext = createContext();
@@ -140,10 +141,11 @@ export default function AuthProvider({ children }) {
     if (!firebaseUser) return;
     const uid = firebaseUser.uid;
     const userRef = doc(db, "users", uid);
+    const snap = await getDoc(userRef);
 
-    await setDoc(
-      userRef,
-      {
+    // If user doc doesn't exist yet, create with default role 'user'
+    if (!snap.exists()) {
+      await setDoc(userRef, {
         uid,
         email: firebaseUser.email || null,
         displayName: firebaseUser.displayName || null,
@@ -154,6 +156,19 @@ export default function AuthProvider({ children }) {
         selectedPetName: null,
         addresses: [],
         createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      });
+      return;
+    }
+
+    // If it exists (e.g. role already set to 'admin'), only refresh basic fields
+    const existing = snap.data() || {};
+    await setDoc(
+      userRef,
+      {
+        uid,
+        email: firebaseUser.email || existing.email || null,
+        displayName: firebaseUser.displayName || existing.displayName || null,
         updatedAt: serverTimestamp(),
       },
       { merge: true }
