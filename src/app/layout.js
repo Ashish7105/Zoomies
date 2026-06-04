@@ -5,6 +5,7 @@ import EmployeeProvider from "@/lib/contexts/EmployeeContext";
 import CustomNavbar from "@/components/CustomNavbar";
 import { CartProvider } from "@/lib/contexts/CartContext";
 import CartSidebar from "@/components/cart/CartSidebar";
+import { Analytics } from "@vercel/analytics/next";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -36,7 +37,7 @@ export default function RootLayout({ children }) {
           </EmployeeProvider>
         </AuthProvider>
         </CartProvider>
-        
+        <Analytics />
       </body>
     </html>
   );
