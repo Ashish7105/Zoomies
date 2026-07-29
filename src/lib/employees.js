@@ -24,25 +24,48 @@ const COLLECTION = "employees";
 export async function verifyEmployee({ email, password }) {
   if (!email?.trim() || !password) return null;
 
-  const employeesRef = collection(db, COLLECTION);
-  const normalizedEmail = email.trim().toLowerCase();
-  const q = query(employeesRef, where("isActive", "==", true));
-  const snapshot = await getDocs(q);
-  const match = snapshot.docs.find(
-    (d) => (d.data().email || "").toLowerCase() === normalizedEmail
-  );
-  if (!match) return null;
+  try {
+    const employeesRef = collection(db, COLLECTION);
+    const normalizedEmail = email.trim().toLowerCase();
+    
+    // First try to find ANY employee with matching email (regardless of isActive)
+    const allEmployeesQuery = query(employeesRef);
+    const allSnapshot = await getDocs(allEmployeesQuery);
+    
+    const matchByEmail = allSnapshot.docs.find(
+      (d) => (d.data().email || "").toLowerCase() === normalizedEmail
+    );
+    
+    if (!matchByEmail) {
+      console.error(`Employee with email ${normalizedEmail} not found in Firestore`);
+      return null;
+    }
+    
+    const data = matchByEmail.data();
+    
+    // Check if employee is active
+    if (data.isActive === false) {
+      console.error(`Employee ${normalizedEmail} is inactive`);
+      return null;
+    }
+    
+    // Verify password
+    if ((data.password || "") !== password) {
+      console.error(`Invalid password for employee ${normalizedEmail}`);
+      return null;
+    }
 
-  const data = match.data();
-  if ((data.password || "") !== password) return null;
-
-  return {
-    id: match.id,
-    email: data.email,
-    name: data.name,
-    storeId: data.storeId,
-    role: data.role || "employee",
-  };
+    return {
+      id: matchByEmail.id,
+      email: data.email,
+      name: data.name,
+      storeId: data.storeId,
+      role: data.role || "employee",
+    };
+  } catch (err) {
+    console.error("Error verifying employee:", err);
+    return null;
+  }
 }
 
 /**

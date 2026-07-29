@@ -76,13 +76,11 @@ export default function CheckoutPage() {
             : null,
       });
 
-      console.log("Order placed successfully with ID:", orderId);
-
       // ✅ Mark order as placed to prevent redirect to /items
       isOrderPlacedRef.current = true;
 
-      // ✅ Navigate to order confirmation (don't clear cart yet)
-      router.push("/order-placed");
+      // ✅ Navigate to order confirmation with orderId
+      router.push(`/order-placed?orderId=${orderId}`);
     } catch (error) {
       console.error("Error placing order:", error);
       alert("Failed to place order. Please try again.");

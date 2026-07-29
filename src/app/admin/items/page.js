@@ -1,12 +1,14 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import {
   getAllItems,
   createItem,
   updateItem,
   deleteItem,
 } from "@/lib/items";
+import { storage } from "@/lib/firebase";
+import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 
 const CATEGORIES = ["cat", "dog"];
 
@@ -21,8 +23,10 @@ export default function AdminItemsPage() {
     category: "dog",
     description: "",
   });
+  const [imagePreview, setImagePreview] = useState("/logo.png");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const fileInputRef = useRef(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -35,6 +39,7 @@ export default function AdminItemsPage() {
 
   const openCreate = () => {
     setForm({ name: "", price: "", image: "/logo.png", category: "dog", description: "" });
+    setImagePreview("/logo.png");
     setModal("create");
     setError("");
   };
@@ -48,8 +53,45 @@ export default function AdminItemsPage() {
       category: item.category || "dog",
       description: item.description || "",
     });
+    setImagePreview(item.image || "/logo.png");
     setModal("edit");
     setError("");
+  };
+
+  // Handle image file selection
+  const handleImageChange = (e) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      // Create a local preview
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        setImagePreview(event.target.result);
+      };
+      reader.readAsDataURL(file);
+      // Store file for upload
+      setForm((f) => ({ ...f, imageFile: file }));
+    }
+  };
+
+  // Upload image to Firebase Storage
+  const uploadImage = async (file) => {
+    if (!file) return form.image;
+    
+    try {
+      // Create unique filename with timestamp
+      const timestamp = Date.now();
+      const filename = `${timestamp}-${file.name.replace(/[^a-zA-Z0-9.-]/g, "")}`;
+      const storageRef = ref(storage, `product-images/${filename}`);
+      
+      // Upload file
+      await uploadBytes(storageRef, file);
+      
+      // Get download URL
+      const downloadURL = await getDownloadURL(storageRef);
+      return downloadURL;
+    } catch (err) {
+      throw new Error(`Failed to upload image: ${err.message}`);
+    }
   };
 
   const handleCreate = async (e) => {
@@ -57,10 +99,16 @@ export default function AdminItemsPage() {
     setError("");
     setSaving(true);
     try {
+      // Upload image if a file was selected
+      let imageUrl = form.image;
+      if (form.imageFile) {
+        imageUrl = await uploadImage(form.imageFile);
+      }
+
       await createItem({
         name: form.name,
         price: Number(form.price),
-        image: form.image,
+        image: imageUrl,
         category: form.category,
         description: form.description || undefined,
       });
@@ -79,10 +127,16 @@ export default function AdminItemsPage() {
     setError("");
     setSaving(true);
     try {
+      // Upload image if a file was selected
+      let imageUrl = form.image;
+      if (form.imageFile) {
+        imageUrl = await uploadImage(form.imageFile);
+      }
+
       await updateItem(form.id, {
         name: form.name,
         price: Number(form.price),
-        image: form.image,
+        image: imageUrl,
         category: form.category,
         description: form.description || undefined,
       });
@@ -203,14 +257,28 @@ export default function AdminItemsPage() {
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Image URL</label>
-                <input
-                  type="text"
-                  value={form.image}
-                  onChange={(e) => setForm((f) => ({ ...f, image: e.target.value }))}
-                  className="w-full border border-gray-200 rounded-lg px-3 py-2"
-                  placeholder="/products/photo.png"
-                />
+                <label className="block text-sm font-medium text-gray-700 mb-1">Product Image</label>
+                <div className="flex gap-3">
+                  <div className="flex-1">
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      accept="image/*"
+                      onChange={handleImageChange}
+                      className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm"
+                    />
+                    <p className="text-xs text-gray-500 mt-1">Upload a product image (JPG, PNG, etc.)</p>
+                  </div>
+                  {imagePreview && (
+                    <div className="flex-shrink-0">
+                      <img
+                        src={imagePreview}
+                        alt="Preview"
+                        className="w-16 h-16 rounded-lg object-cover border border-gray-200"
+                      />
+                    </div>
+                  )}
+                </div>
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Category</label>

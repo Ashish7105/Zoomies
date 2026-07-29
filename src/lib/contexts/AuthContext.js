@@ -249,6 +249,16 @@ export default function AuthProvider({ children }) {
     };
 
     const docRef = await addDoc(ordersCol, order);
+    // Mirror order under the user for easier lookup: users/{uid}/orders/{orderId}
+    try {
+      const userOrdersCol = collection(db, "users", uid, "orders");
+      await setDoc(doc(userOrdersCol, docRef.id), {
+        ...order,
+        orderId: docRef.id,
+      });
+    } catch (e) {
+      console.error("Failed to write user sub-order:", e);
+    }
     return docRef.id;
   };
 

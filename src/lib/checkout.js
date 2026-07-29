@@ -6,6 +6,7 @@ import {
   query,
   where,
   getDocs,
+  getDoc,
   doc,
   updateDoc,
   serverTimestamp,
@@ -98,6 +99,18 @@ export async function getAllOrders() {
   const orders = snapshot.docs.map((d) => normalizeOrder(d));
   orders.sort((a, b) => (b.createdAt || "").localeCompare(a.createdAt || ""));
   return orders;
+}
+
+/**
+ * Get a single order by its ID.
+ * @param {string} orderId
+ * @returns {Promise<{ id: string, ...order } | null>}
+ */
+export async function getOrderById(orderId) {
+  if (!orderId) return null;
+  const snap = await getDoc(doc(db, "orders", orderId));
+  if (!snap.exists()) return null;
+  return normalizeOrder(snap);
 }
 
 /**

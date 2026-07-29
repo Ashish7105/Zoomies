@@ -36,12 +36,15 @@ export default function EmployeeLoginPage() {
         router.push("/employee/dashboard");
       } else {
         setError(
-          result.error ||
-            "Invalid credentials. Make sure you've added the employee in Firestore (see EMPLOYEE_FIREBASE_SETUP.md)."
+          "Login failed. Please verify:\n" +
+          "1. Employee exists in Firestore → employees collection\n" +
+          "2. Email and password match exactly\n" +
+          "3. isActive field is set to true\n" +
+          "See EMPLOYEE_FIREBASE_SETUP.md for setup instructions."
         );
       }
     } catch (err) {
-      setError("Login failed. Please try again.");
+      setError("Login failed. Please check your connection and try again. " + err.message);
     } finally {
       setLoading(false);
     }
@@ -60,7 +63,7 @@ export default function EmployeeLoginPage() {
 
         <form onSubmit={handleSubmit} className="space-y-4">
           {error && (
-            <div className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+            <div className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2 whitespace-pre-wrap">
               {error}
             </div>
           )}
